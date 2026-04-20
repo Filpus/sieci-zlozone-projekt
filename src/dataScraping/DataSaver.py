@@ -36,6 +36,7 @@ def csv_writer_worker():
         while True:
             record = data_queue.get()
             if record is None:
+                data_queue.task_done()
                 break
                 
             if record['type'] == 'friend':
