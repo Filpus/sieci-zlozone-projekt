@@ -1,13 +1,11 @@
 import csv
 import threading
-from queue import Queue
 import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from queue import Queue
+import pandas as pd
 from dataScraping.dataScraper import DataScraper
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
+DATA_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'data')
 os.makedirs(DATA_DIR, exist_ok=True)
 EDGES_FILE = os.path.join(DATA_DIR, 'edges.csv')
 NODES_FILE = os.path.join(DATA_DIR, 'nodes.csv')
@@ -15,75 +13,90 @@ NODES_FILE = os.path.join(DATA_DIR, 'nodes.csv')
 data_queue = Queue()
 
 def csv_writer_worker():
-    """Wątek konsumenta: pobiera dane z kolejki i zapisuje do CSV."""
+    file_exists = os.path.isfile(EDGES_FILE)
     
-    with open(EDGES_FILE, 'w', newline='', encoding='utf-8') as f_edges, \
-         open(NODES_FILE, 'w', newline='', encoding='utf-8') as f_nodes:
+    with open(EDGES_FILE, 'a', newline='', encoding='utf-8') as f_edges, \
+         open(NODES_FILE, 'a', newline='', encoding='utf-8') as f_nodes:
         
         edges_writer = csv.writer(f_edges)
         nodes_writer = csv.writer(f_nodes)
         
-        edges_writer.writerow(['source', 'target', 'type', 'weight'])
-        nodes_writer.writerow(['id', 'node_type'])
+        if not file_exists:
+            edges_writer.writerow(['source', 'target', 'type', 'weight'])
+            nodes_writer.writerow(['id', 'node_type'])
         
         seen_nodes = set()
-        
+        if os.path.isfile(NODES_FILE):
+            try:
+                existing_nodes = pd.read_csv(NODES_FILE)
+                seen_nodes.update(existing_nodes['id'].astype(str).tolist())
+            except:
+                pass
+
         while True:
             record = data_queue.get()
-            
             if record is None:
                 break
                 
             if record['type'] == 'friend':
                 edges_writer.writerow([record['source'], record['target'], 'friend', ''])
                 
-                if record['source'] not in seen_nodes:
+                if str(record['source']) not in seen_nodes:
                     nodes_writer.writerow([record['source'], 'user'])
-                    seen_nodes.add(record['source'])
-                if record['target'] not in seen_nodes:
+                    seen_nodes.add(str(record['source']))
+                if str(record['target']) not in seen_nodes:
                     nodes_writer.writerow([record['target'], 'user'])
-                    seen_nodes.add(record['target'])
+                    seen_nodes.add(str(record['target']))
                     
             elif record['type'] == 'game':
                 game_node = f"App_{record['app_id']}"
-                
                 edges_writer.writerow([record['steam_id'], game_node, 'game', record['playtime']])
                 
-                if record['steam_id'] not in seen_nodes:
+                if str(record['steam_id']) not in seen_nodes:
                     nodes_writer.writerow([record['steam_id'], 'user'])
-                    seen_nodes.add(record['steam_id'])
+                    seen_nodes.add(str(record['steam_id']))
                 if game_node not in seen_nodes:
                     nodes_writer.writerow([game_node, 'game'])
                     seen_nodes.add(game_node)
-                    
+            
+            f_edges.flush()
+            f_nodes.flush()
             data_queue.task_done()
 
-def run_scraper_to_csv(seed_id, max_records=500):
-    """Główna funkcja uruchamiająca proces."""
-    
-    writer_thread = threading.Thread(target=csv_writer_worker)
+def run_snowball_to_csv(seed_id, max_records):
+    initial_visited = set()
+    if os.path.isfile(EDGES_FILE):
+        try:
+            print("Wczytywanie istniejacych danych...")
+            df = pd.read_csv(EDGES_FILE)
+            initial_visited.update(df['source'].astype(str).unique())
+            print(f"Pominietych zostanie {len(initial_visited)} juz pobranych wezlow.")
+        except Exception as e:
+            print(f"Blad wczytywania bazy: {e}")
+
+    writer_thread = threading.Thread(target=csv_writer_worker, daemon=True)
     writer_thread.start()
     
-    scraper = DataScraper(seed_id, is_test=True)
+    scraper = DataScraper(seed_id, is_test=False)
     
+    if hasattr(scraper, 'visited'):
+        scraper.visited.update(initial_visited)
+
     counter = 0
-    print(f"Rozpoczynam pobieranie danych dla Seed ID: {seed_id}")
-    
-    for record in scraper.run():
-        if counter >= max_records:
-            break
+    try:
+        for record in scraper.run():
+            if counter >= max_records:
+                break
             
-        data_queue.put(record)
-        counter += 1
-        
-        if counter % 50 == 0:
-            print(f"Pobrano {counter} rekordów...")
-
-    data_queue.put(None)
-    data_queue.join()
-    writer_thread.join()
-    
-    print(f"Zakończono. Zapisano {counter} rekordów w folderze data/")
-
-if __name__ == "__main__":
-    run_scraper_to_csv("76561198154174120", max_records=200)
+            data_queue.put(record)
+            counter += 1
+            
+            if counter % 100 == 0:
+                print(f"Status: Zapisano {counter} nowych krawedzi...")
+    except KeyboardInterrupt:
+        print("\nPrzerwano recznie. Trwa bezpieczne zapisywanie...")
+    finally:
+        data_queue.put(None)
+        data_queue.join()
+        writer_thread.join()
+        print(f"Zakonczono. Dodano {counter} rekordow.")
