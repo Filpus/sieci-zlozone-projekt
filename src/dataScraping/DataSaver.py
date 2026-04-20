@@ -66,12 +66,19 @@ def csv_writer_worker():
 
 def run_snowball_to_csv(seed_id, max_records):
     initial_visited = set()
+    frontier = set()
     if os.path.isfile(EDGES_FILE):
         try:
             print("Wczytywanie istniejacych danych...")
-            df = pd.read_csv(EDGES_FILE)
-            initial_visited.update(df['source'].astype(str).unique())
+            df = pd.read_csv(EDGES_FILE, dtype=str)
+            initial_visited.update(df['source'].unique())
             print(f"Pominietych zostanie {len(initial_visited)} juz pobranych wezlow.")
+            
+            friend_edges = df[df['type'] == 'friend']
+            if not friend_edges.empty:
+                known_friends = set(friend_edges['target'].unique())
+                frontier = known_friends - initial_visited
+                print(f"Wykryto {len(frontier)} znajomych w kolejce z poprzedniej sesji.")
         except Exception as e:
             print(f"Blad wczytywania bazy: {e}")
 
@@ -79,9 +86,8 @@ def run_snowball_to_csv(seed_id, max_records):
     writer_thread.start()
     
     scraper = DataScraper(seed_id, is_test=False)
-    
-    if hasattr(scraper, 'visited'):
-        scraper.visited.update(initial_visited)
+    scraper.visited.update(initial_visited)
+    scraper.frontier = list(frontier)
 
     counter = 0
     try:

@@ -5,9 +5,11 @@ import os
 import threading
 class DataScraper:
     def __init__(self, starting_seed_steam_id, is_test=False):
-        self.seed_id = starting_seed_steam_id
+        self.seed_id = str(starting_seed_steam_id)
         self.is_test = is_test
         self.api_key = self._load_api_key()
+        self.visited = set()
+        self.frontier = []
 
     def _load_api_key(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -38,8 +40,17 @@ class DataScraper:
         return []
 
     def run(self):
-        queue = deque([(self.seed_id, 0)])
-        visited = set([self.seed_id])
+        queue = deque()
+        
+        if self.frontier:
+            for node in self.frontier:
+                if node not in self.visited:
+                    queue.append((node, 0))
+                    self.visited.add(node)
+        
+        if self.seed_id not in self.visited:
+            queue.append((self.seed_id, 0))
+            self.visited.add(self.seed_id)
 
         while queue:
             current_user, depth = queue.popleft()
@@ -59,13 +70,14 @@ class DataScraper:
 
             friends = self._get_friends(current_user)
             for friend in friends:
+                str_friend = str(friend)
                 yield {
                     'type': 'friend',
                     'source': current_user,
-                    'target': friend
+                    'target': str_friend
                 }
-                if friend not in visited:
-                    visited.add(friend)
-                    queue.append((friend, depth + 1))
+                if str_friend not in self.visited:
+                    self.visited.add(str_friend)
+                    queue.append((str_friend, depth + 1))
 
 
