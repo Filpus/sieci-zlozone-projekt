@@ -2,3 +2,7 @@ pandas
 requests
 PyYAML
 dvc
+jupyter
+networkx
+matplotlib
+scipy
