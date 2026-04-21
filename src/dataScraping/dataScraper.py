@@ -1,3 +1,4 @@
+from flask_login import current_user
 import yaml
 import requests
 from collections import deque
@@ -28,14 +29,21 @@ class DataScraper:
         return []
 
     def _get_games(self, steam_id):
-        url = f"http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key={self.api_key}&steamid={steam_id}&format=json"
-        try:
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                return response.json().get('response', {}).get('games', [])
-        except:
-            pass
-        return []
+            url = f"http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key={self.api_key}&steamid={steam_id}&format=json&include_appinfo=1&include_played_free_games=1"
+            try:
+                response = requests.get(url, timeout=20)
+                if response.status_code == 200:
+                    data = response.json().get('response', {})
+                    if 'games' in data:
+                        return data['games']
+                    return []
+                else:
+                    # To powie Ci Prawdę o tym, co robi Steam
+                    print(f"[STATUS {response.status_code}] Odmowa dla ID: {steam_id}")
+                    return []
+            except Exception as e:
+                print(f"Wyjątek połączenia przy grach: {e}")
+                return []
 
     def run(self):
         queue = deque([(self.seed_id, 0)])
@@ -48,14 +56,19 @@ class DataScraper:
                 continue
 
             games = self._get_games(current_user)
-            if games:
-                for game in games:
-                    yield {
-                        'type': 'game',
-                        'steam_id': current_user,
-                        'app_id': game['appid'],
-                        'playtime': game['playtime_forever']
-                    }
+            if not games:
+                print(f"[Odrzucono] Profil prywatny odciął ścieżkę: {current_user}")
+                continue # Przechodzi do nastepnego w kolejce bez dodawania znajomych
+                
+            # Zapisz gry do kolejki
+            for game in games:
+                yield {
+                    'type': 'game',
+                    'steam_id': current_user,
+                    'app_id': game['appid'],
+                    'playtime': game.get('playtime_forever', 0),
+                    'name': game.get('name', 'Unknown')
+                }
 
             friends = self._get_friends(current_user)
             for friend in friends:
