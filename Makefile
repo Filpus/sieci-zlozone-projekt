@@ -3,7 +3,7 @@
 IMAGE_NAME=steam-network-analysis
 
 SEED ?= 76561198154174120
-LIMIT ?= 1000
+LIMIT ?= 10000000000
 
 build:
 	docker build -t $(IMAGE_NAME) .
