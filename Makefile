@@ -21,4 +21,7 @@ metadata:
 	docker run -it --rm -v "$(CURDIR):/app" $(IMAGE_NAME) python -u src/main.py metadata --input data/unique_games.csv --output data/game_info.csv
 
 jupyter:
-	docker run -it --rm -p 8888:8888 -v "$(CURDIR):/app" $(IMAGE_NAME) jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+	docker-compose up -d
+
+down:
+	docker-compose down

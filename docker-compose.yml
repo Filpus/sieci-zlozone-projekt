@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:5.18.0
+    container_name: steam_neo4j
+    ports:
+      - "7474:7474" # Interfejs przeglądarki Neo4j HTTP
+      - "7687:7687" # Sterownik Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["graph-data-science", "apoc"]
+      - NEO4J_dbms_memory_heap_initial__size=2G
+      - NEO4J_dbms_memory_heap_max__size=4G
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
+    volumes:
+      - neo4j_data:/data
+      - ./data:/import # to absolutnie kluczowe do wczytywania CSV
+    restart: unless-stopped
+
+  jupyter:
+    build: .
+    container_name: steam_jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./:/app
+    command: jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+    depends_on:
+      - neo4j
+
+volumes:
+  neo4j_data:

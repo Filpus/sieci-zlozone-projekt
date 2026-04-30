@@ -6,3 +6,6 @@ jupyter
 networkx
 matplotlib
 scipy
+seaborn
+tqdm
+neo4j
