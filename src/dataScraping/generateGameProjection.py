@@ -5,7 +5,7 @@ import os
 from collections import Counter, defaultdict
 from itertools import combinations
 
-def generate_out_of_core_projection(input_file, output_file, db_file="temp_edges.db"):
+def generate_out_of_core_projection(input_file, output_file, min_playtime=0, db_file="temp_edges.db"):
     print("ETAP 1: Skanowanie bazy i zapisywanie bibliotek (Tylko czyste dane w RAM)...")
     
     user_games = defaultdict(list)
@@ -31,7 +31,7 @@ def generate_out_of_core_projection(input_file, output_file, db_file="temp_edges
                 
                 try:
                     weight = float(row[weight_idx].strip())
-                    if weight > 0:
+                    if weight >= min_playtime:
                         user_games[source].append(target)
                         game_popularity[target] += 1
                 except ValueError:
@@ -131,7 +131,16 @@ def generate_out_of_core_projection(input_file, output_file, db_file="temp_edges
 
 if __name__ == "__main__":
     base_dir = os.path.dirname(__file__)
-    INPUT_FILE = os.path.join(base_dir, '..', 'data', 'edges-Copy1.csv')
-    OUTPUT_FILE = os.path.join(base_dir, '..', 'data', 'game_game_rich_projection.csv')
+    INPUT_FILE = os.path.join(base_dir, '..', '..', 'data', 'edges-Copy1.csv')
     
-    generate_out_of_core_projection(INPUT_FILE, OUTPUT_FILE)
+    # Próg 4 godzin = 240 minut
+    MIN_PLAYTIME = 1
+    
+    output_dir = os.path.join(base_dir, '..', '..', 'data', 'filtered_playtime')
+    os.makedirs(output_dir, exist_ok=True)
+    
+    OUTPUT_FILE = os.path.join(output_dir, f'game_game_rich_projection_{MIN_PLAYTIME}.csv')
+    db_file_path = os.path.join(output_dir, f'temp_edges_{MIN_PLAYTIME}.db')
+    
+    print(f"Uruchamiam projekcję z progiem czasu gry >= {MIN_PLAYTIME} minut...")
+    generate_out_of_core_projection(INPUT_FILE, OUTPUT_FILE, min_playtime=MIN_PLAYTIME, db_file=db_file_path)
